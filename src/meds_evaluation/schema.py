@@ -16,11 +16,11 @@ REQUIRED_FIELDS = {SUBJECT_ID_FIELD, PREDICTION_TIME_FIELD, BOOLEAN_VALUE_FIELD}
 PREDICTION_FIELDS = {PREDICTED_BOOLEAN_VALUE_FIELD, PREDICTED_BOOLEAN_PROBABILITY_FIELD}
 
 BINARY_CLASSIFICATION_SCHEMA_DICT = {
-    "subject_id": pl.Int64,
-    "prediction_time": pl.Datetime,
-    "boolean_value": pl.Boolean,
-    "predicted_boolean_value": pl.Boolean,
-    "predicted_boolean_probability": pl.Float64,
+    SUBJECT_ID_FIELD: pl.Int64,
+    PREDICTION_TIME_FIELD: pl.Datetime,
+    BOOLEAN_VALUE_FIELD: pl.Boolean,
+    PREDICTED_BOOLEAN_VALUE_FIELD: pl.Boolean,
+    PREDICTED_BOOLEAN_PROBABILITY_FIELD: pl.Float64,
 }
 
 
@@ -64,4 +64,36 @@ def validate_binary_classification_schema(df: pl.DataFrame) -> None:
                 raise ValueError(
                     f"Mismatched type for {prediction_field}: expected {df_type_dict[prediction_field]}, "
                     f"got {BINARY_CLASSIFICATION_SCHEMA_DICT[prediction_field]}"
+                )
+
+REQUIRED_FIELDS_GROUP = {SUBJECT_ID_FIELD, PREDICTION_TIME_FIELD, BOOLEAN_VALUE_FIELD}
+
+GROUPS_SCHEMA_DICT = {
+    SUBJECT_ID_FIELD: pl.Int64,
+    PREDICTION_TIME_FIELD: pl.Datetime,
+    BOOLEAN_VALUE_FIELD: pl.Boolean,
+}
+
+def validate_group_schema(df: pl.DataFrame) -> None:
+    """Checks if the group membership dataframe contains the necessary columns.
+
+    Args:
+        df: a DataFrame containing at least two columns.
+
+    Raises:
+        ValueError: if the group dataframe does not contain the necessary columns.
+    """
+    df_type_dict = dict(df.schema)
+
+    # Check required fields
+    df_fields = set(df_type_dict.keys())
+    missing_required_fields = REQUIRED_FIELDS_GROUP - df_fields
+    if missing_required_fields:
+        raise ValueError(f"Missing required fields: {missing_required_fields}")
+    else:
+        for required_field in REQUIRED_FIELDS:
+            if df_type_dict[required_field] != GROUPS_SCHEMA_DICT[required_field]:
+                raise ValueError(
+                    f"Mismatched type for {required_field}: expected {df_type_dict[required_field]}, "
+                    f"got {GROUPS_SCHEMA_DICT[required_field]}"
                 )

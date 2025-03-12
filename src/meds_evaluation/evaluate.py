@@ -18,13 +18,21 @@ import polars as pl
 from numpy.typing import ArrayLike
 from sklearn.calibration import calibration_curve
 from sklearn.metrics import accuracy_score, average_precision_score, brier_score_loss, f1_score, roc_auc_score
+from aif360.sklearn.metrics import (
+    average_odds_difference, 
+    conditional_demographic_disparity, 
+    equal_opportunity_difference, 
+    statistical_parity_difference, 
+)
 
 from meds_evaluation.schema import (
     BOOLEAN_VALUE_FIELD,
+    GROUPS_SCHEMA_DICT,
     PREDICTED_BOOLEAN_PROBABILITY_FIELD,
     PREDICTED_BOOLEAN_VALUE_FIELD,
     SUBJECT_ID_FIELD,
     validate_binary_classification_schema,
+    validate_group_schema,
 )
 from meds_evaluation.utils import _resample
 
@@ -91,6 +99,49 @@ def evaluate_binary_classification(
     # TODO write to output file
     return results
 
+def evaluate_fairness_binary_classification(
+    predictions: pl.DataFrame, groups: pl.DataFrame
+) -> dict[str, dict[str, float | list[ArrayLike]]]:
+    """Evaluates the fairness of a set of model predictions for binary classification tasks.
+
+    Args:
+        predictions: a DataFrame following the MEDS label schema and additional columns for
+        "predicted_value" and "predicted_probability".
+        groups: a DataFrame containing the group membership of each sample.
+        samples_per_subject: the number of samples to take for each unique subject_id in the dataframe for
+        per-subject metrics.
+        resampling_seed: random seed for resampling the dataframe.
+        # TODO consider adding a parameter for the metric set to evaluate
+
+    Returns:
+        A dictionary mapping the metric names to their values.
+        The visual (curve-based) metrics will return the raw values needed to create the plot.
+
+    Raises:
+        ValueError: if the predictions dataframe does not contain the necessary columns.
+    """
+    # Verify the dataframe schema to contain required fields for the binary classification metrics
+    validate_binary_classification_schema(predictions)
+    validate_group_schema(groups)
+
+    true_values = predictions[BOOLEAN_VALUE_FIELD]
+    predicted_probabilities = predictions[PREDICTED_BOOLEAN_PROBABILITY_FIELD]
+
+    if predicted_probabilities.is_null().all():
+        predicted_probabilities = None
+
+    results = {}
+    for group in groups.columns:
+        if group not in GROUPS_SCHEMA_DICT:
+            results[group] = _get_fairness_binary_classification_metrics(
+                true_values, predicted_probabilities, groups[group]
+            )
+            for group_unique in groups[group].unique():
+                results[group][group_unique] = evaluate_binary_classification(predictions[groups[group] == group_unique])
+            
+    # TODO write to output file
+    return results
+
 
 def _get_binary_classification_metrics(
     true_values: ArrayLike,
@@ -122,5 +173,32 @@ def _get_binary_classification_metrics(
         c = calibration_curve(true_values, predicted_probabilities, n_bins=10)
         results["calibration_error"] = np.abs(c[0] - c[1]).mean()
         results["brier_score"] = brier_score_loss(true_values, predicted_probabilities)
+
+    return results
+
+
+def _get_fairness_binary_classification_metrics(
+    true_values: ArrayLike,
+    predicted_probabilities: ArrayLike | None,
+    group_membership: ArrayLike | None,
+) -> dict[str, float | list[ArrayLike]]:
+    """Calculates a set of fairness metrics based on the true and predicted values and group membership.
+
+    Args:
+        true_values: the true binary values
+        predicted_values: the predicted binary values
+        group_membership: the group membership of each sample
+        TODO consider the list of metrics
+
+    Returns:
+        A dictionary mapping the metric names to their values.
+    """
+    results = {}
+
+    if predicted_probabilities is not None:
+        results["average_odds_difference"] = average_odds_difference(true_values, predicted_probabilities, group_membership)
+        results["conditional_demographic_disparity"] = conditional_demographic_disparity(true_values, predicted_probabilities, group_membership)
+        results["equal_opportunity_difference"] = equal_opportunity_difference(true_values, predicted_probabilities, group_membership)
+        results["statistical_parity_difference"] = statistical_parity_difference(true_values, predicted_probabilities, group_membership)
 
     return results
