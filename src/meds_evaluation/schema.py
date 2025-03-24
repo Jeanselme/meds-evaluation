@@ -91,7 +91,7 @@ def validate_group_schema(df: pl.DataFrame) -> None:
     if missing_required_fields:
         raise ValueError(f"Missing required fields: {missing_required_fields}")
     else:
-        for required_field in REQUIRED_FIELDS:
+        for required_field in REQUIRED_FIELDS_GROUP:
             if df_type_dict[required_field] != GROUPS_SCHEMA_DICT[required_field]:
                 raise ValueError(
                     f"Mismatched type for {required_field}: expected {df_type_dict[required_field]}, "
