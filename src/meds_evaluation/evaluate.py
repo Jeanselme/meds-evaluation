@@ -124,7 +124,11 @@ def evaluate_fairness_binary_classification(
     validate_binary_classification_schema(predictions)
     validate_group_schema(groups)
 
+    # Match as their might not be column time
+    groups = groups.join(predictions, how = 'right', left_on=SUBJECT_ID_FIELD, right_on=SUBJECT_ID_FIELD).select(groups.columns)
+
     true_values = predictions[BOOLEAN_VALUE_FIELD]
+    predicted_values = predictions[PREDICTED_BOOLEAN_VALUE_FIELD]
     predicted_probabilities = predictions[PREDICTED_BOOLEAN_PROBABILITY_FIELD]
 
     if predicted_probabilities.is_null().all():
@@ -133,11 +137,12 @@ def evaluate_fairness_binary_classification(
     results = {}
     for group in groups.columns:
         if group not in GROUPS_SCHEMA_DICT:
-            results[group] = _get_fairness_binary_classification_metrics(
-                true_values, predicted_probabilities, groups[group]
-            )
-            for group_unique in groups[group].unique():
-                results[group][group_unique] = evaluate_binary_classification(predictions[groups[group] == group_unique])
+            results[group] = {}
+            for group_unique in groups[group].drop_nulls().unique():
+                results[group][group_unique] = _get_fairness_binary_classification_metrics(
+                    true_values.to_pandas(), predicted_values.to_pandas(), (groups[group] == group_unique).to_pandas().fillna(False)
+                )
+                results[group][group_unique].update(evaluate_binary_classification(predictions.filter(groups[group] == group_unique)))
             
     # TODO write to output file
     return results
@@ -179,7 +184,7 @@ def _get_binary_classification_metrics(
 
 def _get_fairness_binary_classification_metrics(
     true_values: ArrayLike,
-    predicted_probabilities: ArrayLike | None,
+    predicted_values: ArrayLike | None,
     group_membership: ArrayLike | None,
 ) -> dict[str, float | list[ArrayLike]]:
     """Calculates a set of fairness metrics based on the true and predicted values and group membership.
@@ -195,10 +200,14 @@ def _get_fairness_binary_classification_metrics(
     """
     results = {}
 
-    if predicted_probabilities is not None:
-        results["average_odds_difference"] = average_odds_difference(true_values, predicted_probabilities, group_membership)
-        results["conditional_demographic_disparity"] = conditional_demographic_disparity(true_values, predicted_probabilities, group_membership)
-        results["equal_opportunity_difference"] = equal_opportunity_difference(true_values, predicted_probabilities, group_membership)
-        results["statistical_parity_difference"] = statistical_parity_difference(true_values, predicted_probabilities, group_membership)
+    if predicted_values is not None:
+        try: results["average_odds_difference"] = average_odds_difference(true_values, predicted_values, prot_attr = group_membership)
+        except: raise        
+        try: results["conditional_demographic_disparity"] = conditional_demographic_disparity(true_values, predicted_values, prot_attr = group_membership)
+        except: raise
+        try: results["equal_opportunity_difference"] = equal_opportunity_difference(true_values, predicted_values, prot_attr = group_membership, priv_group = True)
+        except: raise
+        try: results["statistical_parity_difference"] = statistical_parity_difference(true_values, predicted_values, prot_attr = group_membership, priv_group = True)
+        except: pass
 
     return results

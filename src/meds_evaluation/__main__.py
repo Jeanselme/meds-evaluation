@@ -9,7 +9,7 @@ import polars as pl
 from loguru import logger
 from omegaconf import DictConfig, OmegaConf
 
-from meds_evaluation.evaluate import evaluate_binary_classification
+from meds_evaluation.evaluate import evaluate_binary_classification, evaluate_fairness_binary_classification
 
 config_yaml = files("meds_evaluation").joinpath("configs/meds_evaluation.yaml")
 

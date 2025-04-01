@@ -66,12 +66,10 @@ def validate_binary_classification_schema(df: pl.DataFrame) -> None:
                     f"got {BINARY_CLASSIFICATION_SCHEMA_DICT[prediction_field]}"
                 )
 
-REQUIRED_FIELDS_GROUP = {SUBJECT_ID_FIELD, PREDICTION_TIME_FIELD, BOOLEAN_VALUE_FIELD}
+REQUIRED_FIELDS_GROUP = {SUBJECT_ID_FIELD}
 
 GROUPS_SCHEMA_DICT = {
     SUBJECT_ID_FIELD: pl.Int64,
-    PREDICTION_TIME_FIELD: pl.Datetime,
-    BOOLEAN_VALUE_FIELD: pl.Boolean,
 }
 
 def validate_group_schema(df: pl.DataFrame) -> None:
