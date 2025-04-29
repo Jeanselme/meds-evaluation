@@ -40,6 +40,78 @@ from meds_evaluation.utils import _resample
 #   detect which set of metrics to obtain based on the task and the contents of the model prediction dataframe
 
 
+def evaluate_bootstrapped_binary_classification(
+    predictions: pl.DataFrame,
+    groups: pl.DataFrame,
+    bootstrapping=100,
+) -> dict[str, dict[str, float | list[ArrayLike]]]:
+    """Evaluates a set of model predictions for binary classification tasks with bootstrap confidence.
+
+    Args:
+        predictions: a DataFrame following the MEDS label schema and additional columns for
+        "predicted_value" and "predicted_probability".
+        bootstrapping: number of bootstrap samples to take for confidence intervals.
+        # TODO consider adding a parameter for the metric set to evaluate
+
+    Returns:
+        A dictionary mapping the metric names to their values.
+        The visual (curve-based) metrics will return the raw values needed to create the plot.
+
+    Raises:
+        ValueError: if the predictions dataframe does not contain the necessary columns.
+    """
+    assert bootstrapping > 0, "Bootstrapping must be a positive integer."
+    validate_binary_classification_schema(predictions)
+    validate_group_schema(groups)
+
+    # Match as their might not be column time
+    groups = groups.join(predictions, how = 'right', left_on=SUBJECT_ID_FIELD, right_on=SUBJECT_ID_FIELD).select(groups.columns)
+    boot_res, all_keys = {}, set()
+    for bi in range(bootstrapping):
+        resampled_predictions = _resample(
+            predictions,
+            random_seed=bi,
+        )
+        resampled_groups = _resample(
+            groups,
+            random_seed=bi,
+        )
+
+        true_values_resampled = resampled_predictions[BOOLEAN_VALUE_FIELD]
+        predicted_values_resampled = resampled_predictions[PREDICTED_BOOLEAN_VALUE_FIELD]
+        predicted_probabilities_resampled = resampled_predictions[PREDICTED_BOOLEAN_PROBABILITY_FIELD]
+
+        if predicted_values_resampled.is_null().all():
+            predicted_values_resampled = None
+
+        if predicted_probabilities_resampled.is_null().all():
+            predicted_probabilities_resampled = None
+
+        boot_res[bi] = {'all': _get_binary_classification_metrics(
+            true_values_resampled, predicted_values_resampled, predicted_probabilities_resampled
+        )}
+
+        for group in groups.columns:
+            if group not in GROUPS_SCHEMA_DICT:
+                for group_unique in groups[group].drop_nulls().unique():
+                    boot_res[bi][group + '_' + group_unique] = _get_fairness_binary_classification_metrics(
+                        true_values_resampled.to_pandas(), predicted_probabilities_resampled.to_pandas(), (resampled_groups[group] == group_unique).to_pandas().fillna(False)
+                    )
+                    boot_res[bi][group + '_' + group_unique].update(_get_binary_classification_metrics(true_values_resampled.filter(resampled_groups[group] == group_unique), predicted_values_resampled.filter(resampled_groups[group] == group_unique), predicted_probabilities_resampled.filter(resampled_groups[group] == group_unique)))
+            
+                all_keys.update(boot_res[bi][group + '_' + group_unique].keys())
+
+    # Summarize the results
+    results = {}
+    for group in boot_res[0]:
+        results[group] = {}
+        for metric in all_keys:
+            metric_values = [boot_res[bi][group][metric] for bi in range(bootstrapping) if metric in boot_res[bi][group]]
+            results[group]["mean_" + metric] = np.mean(metric_values)
+            results[group]["std_" + metric] = np.std(metric_values)
+
+    return results
+
 def evaluate_binary_classification(
     predictions: pl.DataFrame, samples_per_subject=4, resampling_seed=0
 ) -> dict[str, dict[str, float | list[ArrayLike]]]:
@@ -202,11 +274,11 @@ def _get_fairness_binary_classification_metrics(
 
     if predicted_values is not None:
         try: results["average_odds_difference"] = average_odds_difference(true_values, predicted_values, prot_attr = group_membership)
-        except: raise        
+        except: pass        
         try: results["conditional_demographic_disparity"] = conditional_demographic_disparity(true_values, predicted_values, prot_attr = group_membership)
-        except: raise
+        except: pass
         try: results["equal_opportunity_difference"] = equal_opportunity_difference(true_values, predicted_values, prot_attr = group_membership, priv_group = True)
-        except: raise
+        except: pass
         try: results["statistical_parity_difference"] = statistical_parity_difference(true_values, predicted_values, prot_attr = group_membership, priv_group = True)
         except: pass
 
