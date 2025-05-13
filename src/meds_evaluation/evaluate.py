@@ -97,8 +97,14 @@ def evaluate_bootstrapped_binary_classification(
                     boot_res[bi][group + '_' + group_unique] = _get_fairness_binary_classification_metrics(
                         true_values_resampled.to_pandas(), predicted_probabilities_resampled.to_pandas(), (resampled_groups[group] == group_unique).to_pandas().fillna(False)
                     )
-                    boot_res[bi][group + '_' + group_unique].update(_get_binary_classification_metrics(true_values_resampled.filter(resampled_groups[group] == group_unique), predicted_values_resampled.filter(resampled_groups[group] == group_unique), predicted_probabilities_resampled.filter(resampled_groups[group] == group_unique)))
-            
+                    boot_res[bi][group + '_' + group_unique] = _get_binary_classification_metrics(true_values_resampled.filter(resampled_groups[group] == group_unique) if true_values_resampled is not None else None,
+                                                                                                 predicted_values_resampled.filter(resampled_groups[group] == group_unique) if predicted_values_resampled is not None else None,
+                                                                                                 predicted_probabilities_resampled.filter(resampled_groups[group] == group_unique))
+
+                    rest = _get_binary_classification_metrics(true_values_resampled.filter(resampled_groups[group] != group_unique) if true_values_resampled is not None else None, 
+                                                                predicted_values_resampled.filter(resampled_groups[group] != group_unique) if predicted_values_resampled is not None else None, 
+                                                                predicted_probabilities_resampled.filter(resampled_groups[group] != group_unique))
+                    boot_res[bi][group + '_' + group_unique + '_difference'] = {metric: boot_res[bi][group + '_' + group_unique][metric] - rest[metric] for metric in rest}
                 all_keys.update(boot_res[bi][group + '_' + group_unique].keys())
 
     # Summarize the results
