@@ -65,17 +65,13 @@ def evaluate_bootstrapped_binary_classification(
     validate_group_schema(groups)
 
     # Match as their might not be column time
-    groups = groups.join(predictions, how = 'right', left_on=SUBJECT_ID_FIELD, right_on=SUBJECT_ID_FIELD).select(groups.columns)
     boot_res, all_keys = {}, set()
     for bi in range(bootstrapping):
         resampled_predictions = _resample(
             predictions,
             random_seed=bi,
         )
-        resampled_groups = _resample(
-            groups,
-            random_seed=bi,
-        )
+        resampled_groups = groups.join(resampled_predictions, how = 'right', left_on=SUBJECT_ID_FIELD, right_on=SUBJECT_ID_FIELD).select(groups.columns)
 
         true_values_resampled = resampled_predictions[BOOLEAN_VALUE_FIELD]
         predicted_values_resampled = resampled_predictions[PREDICTED_BOOLEAN_VALUE_FIELD]
