@@ -89,7 +89,7 @@ def evaluate_bootstrapped_binary_classification(
 
         for group in groups.columns:
             if group not in GROUPS_SCHEMA_DICT:
-                for group_unique in groups[group].drop_nulls().unique():
+                for group_unique in resampled_groups[group].drop_nulls().unique():
                     boot_res[bi][group + '_' + group_unique] = _get_fairness_binary_classification_metrics(
                         true_values_resampled.to_pandas(), predicted_probabilities_resampled.to_pandas(), (resampled_groups[group] == group_unique).to_pandas().fillna(False)
                     )
