@@ -45,9 +45,9 @@ from meds_evaluation.utils import _resample
 logger = logging.getLogger(__name__)
 
 # Minimum requirements for a subgroup to be evaluated
-MIN_SUBGROUP_SAMPLES = 20
-MIN_POSITIVE_RATE = 0.01
-MAX_POSITIVE_RATE = 0.99
+MIN_SUBGROUP_SAMPLES = 10
+MIN_POSITIVE_RATE = 0.0001
+MAX_POSITIVE_RATE = 0.9999
 
 
 def _is_valid_subgroup(true_values: ArrayLike) -> bool:
@@ -61,7 +61,7 @@ def _is_valid_subgroup(true_values: ArrayLike) -> bool:
     """
     if len(true_values) < MIN_SUBGROUP_SAMPLES:
         return False
-    positive_rate = np.mean(true_values)
+    positive_rate = np.mean(np.asarray(true_values))
     return MIN_POSITIVE_RATE <= positive_rate <= MAX_POSITIVE_RATE
 
 
